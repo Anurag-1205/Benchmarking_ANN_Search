@@ -1,0 +1,19 @@
+# environments and caches
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# datasets and index files must never be committed or zipped (assignment rule)
+data/
+*.hdf5
+*.npy
+*.index
+*.faiss
+*.hnsw
+
+# editor / OS
+.vscode/
+.DS_Store

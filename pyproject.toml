@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "annbench"
+version = "0.1.0"
+description = "IRE Assignment 3: benchmarking approximate nearest neighbour search (HNSW, IVF-Flat, IVF-PQ)"
+requires-python = ">=3.10"
+# Third-party packages are pinned in requirements.txt; this file only makes `annbench` importable.
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["annbench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
