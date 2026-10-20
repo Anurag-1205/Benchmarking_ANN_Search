@@ -123,6 +123,39 @@ def log_run(*, path: Path | None = None, **fields: Any) -> dict[str, Any]:
     return row
 
 
+def drop_rows(experiment: str, *, dataset: str | None = None, path: Path | None = None) -> int:
+    """Delete earlier rows of `experiment` (optionally of one dataset) for the current mode, so a re-run replaces
+    its rows instead of piling up duplicates. Returns the number of rows removed."""
+    target = Path(path) if path is not None else config.results_csv()
+    if not target.exists():
+        return 0
+    mode = "quick" if config.is_quick() else "full"
+    col = {name: i for i, name in enumerate(COLUMNS)}
+    with open(target, "r+", newline="") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            rows = list(csv.reader(f))
+            if not rows:
+                return 0
+            if tuple(rows[0]) != COLUMNS:
+                raise RuntimeError(f"{target} has a different header than results_log.COLUMNS")
+            keep = [r for r in rows[1:]
+                    if not (r[col["experiment"]] == experiment and r[col["mode"]] == mode
+                            and (dataset is None or r[col["dataset"]] == dataset))]
+            removed = len(rows) - 1 - len(keep)
+            if removed:
+                f.seek(0)
+                f.truncate()
+                writer = csv.writer(f, lineterminator="\n")
+                writer.writerow(COLUMNS)
+                writer.writerows(keep)
+                f.flush()
+                os.fsync(f.fileno())
+            return removed
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def load_results(path: Path | None = None):
     """Read results.csv into a DataFrame; JSON columns are parsed back into Python objects."""
     import pandas as pd

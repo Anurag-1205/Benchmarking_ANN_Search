@@ -1,8 +1,8 @@
 """Evaluation metrics.
 
 YOURS TO WRITE (assignment Part 1: "write your own recall@10 function ... and add a few unit tests").
-The signature below is what the benchmark runner (Part 2 onwards) will call; if you change it, tell me and I
-will adapt the runner. Your unit tests belong in tests/test_recall.py.
+The signatures below are what the benchmark runner (Part 1 onwards) calls; if you change one, tell me and I
+will adapt the runner. Your unit tests belong in tests/test_recall.py (stubs are waiting there).
 """
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ def recall_at_k(
         The indexed vectors (may be a np.memmap). Used to recompute the TRUE distance of every returned id,
         because an index such as IVF-PQ reports approximate distances.
     kth_true_dist_sq : (n_queries,) float
-        Squared L2 distance from each query to its TRUE k-th nearest neighbour, i.e. column k-1 of the
-        distances returned by exact `faiss.IndexFlatL2.search` (FAISS reports *squared* L2).
+        Squared L2 distance from each query to its TRUE k-th nearest neighbour: `exact.GroundTruth.kth_dist_sq(k)`
+        (FAISS IndexFlatL2 candidates re-scored exactly; note that FAISS reports *squared* L2).
     k : int
         Number of neighbours that count (10 in this assignment).
     rel_eps : float
@@ -62,3 +62,15 @@ def recall_at_k(
       (see memory.chunk_slices) rather than in one shot.
     """
     raise NotImplementedError("TODO(you): implement recall_at_k - see the docstring for the contract")
+
+
+def recall_at_10(
+    returned_ids: np.ndarray,
+    queries: np.ndarray,
+    base: np.ndarray,
+    kth_true_dist_sq: np.ndarray,
+    rel_eps: float = 1e-5,
+    per_query: bool = False,
+) -> float | np.ndarray:
+    """The assignment's recall@10: `recall_at_k` with k = 10 (same contract, see its docstring)."""
+    return recall_at_k(returned_ids, queries, base, kth_true_dist_sq, k=10, rel_eps=rel_eps, per_query=per_query)

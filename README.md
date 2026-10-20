@@ -28,6 +28,8 @@ disk for the data (1 GB downloaded + 1 GB converted), and at least 2 GiB of free
 |---|---|
 | `annbench/config.py` | paths, constants, quick-mode switch (`ANNBENCH_QUICK`) |
 | `annbench/data.py` | HDF5 -> `.npy` conversion, memory-mapped loading, query split |
+| `annbench/exact.py` | exact search (IndexFlatL2), cached ground truth, agreement with the HDF5 file |
+| `annbench/stages/` | one runnable module per part, e.g. `python -m annbench.stages.part1_exact` |
 | `annbench/results_log.py` | the only writer of `results.csv` |
 | `annbench/threads.py` | single-thread enforcement for searches |
 | `annbench/memory.py` | RAM guards and chunking helpers |
@@ -54,7 +56,7 @@ Written to `system_info.json` by `run_all.sh`. _TODO: paste the summary here onc
 | Part | State |
 |---|---|
 | Setup | done |
-| 1 Exact baseline | TODO |
+| 1 Exact baseline | plumbing ready; waiting for `recall_at_k` and the timing loops |
 | 2 Benchmark | TODO |
 | 3 Standard-data experiment | TODO |
 | 4 Own-data experiment | TODO |

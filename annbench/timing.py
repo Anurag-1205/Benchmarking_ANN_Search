@@ -22,6 +22,11 @@ class TimingResult:
     n_queries: int             # queries per pass
     n_repeats: int
 
+    @property
+    def mean_latency_ms(self) -> float:
+        """Average milliseconds per query implied by the median QPS (for a batch: amortised over the batch)."""
+        return 1000.0 / self.qps_median
+
 
 def time_single_queries(
     search_fn: Callable[[np.ndarray], Any],

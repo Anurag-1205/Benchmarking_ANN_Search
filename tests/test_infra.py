@@ -91,3 +91,15 @@ def test_force_single_thread_search_pins_faiss_and_hnswlib():
     with threads.faiss_threads(2) as n:
         assert n == 2
     assert faiss.omp_get_max_threads() == 1                 # the previous value is restored
+
+
+def test_drop_rows_removes_only_the_matching_rows(tmp_path):
+    path = tmp_path / "results.csv"
+    results_log.log_run(path=path, **_row(experiment="a", dataset="sift"))
+    results_log.log_run(path=path, **_row(experiment="a", dataset="glove"))
+    results_log.log_run(path=path, **_row(experiment="b", dataset="sift"))
+    assert results_log.drop_rows("a", dataset="sift", path=path) == 1
+    df = results_log.load_results(path)
+    assert sorted(zip(df["experiment"], df["dataset"])) == [("a", "glove"), ("b", "sift")]
+    assert results_log.drop_rows("a", path=path) == 1
+    assert results_log.drop_rows("missing", path=path) == 0
