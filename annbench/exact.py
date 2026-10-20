@@ -16,7 +16,6 @@ k = 100 could only belong in the true top 10 if the rounding error exceeded the 
 from __future__ import annotations
 
 import gc
-import json
 import os
 import time
 from dataclasses import dataclass
@@ -26,7 +25,7 @@ import faiss
 import numpy as np
 
 from . import config, memory, threads
-from .data import Dataset, processed_dir
+from .data import Dataset, source_fingerprint
 
 GT_K = 100            # neighbours kept per query (the HDF5 files also store 100)
 RESCORE_CHUNK = 256   # queries per re-scoring block: 256 x 100 x 128 float32 = 13 MB
@@ -73,21 +72,17 @@ def _cache_path(ds: Dataset, k: int) -> Path:
     return config.data_dir() / "ground_truth" / f"{ds.name}_n{ds.n_base}_q{ds.n_queries}_k{k}.npz"
 
 
-def _source_fingerprint(name: str) -> str:
-    """sha256 of the HDF5 the processed data came from; re-preparing a dataset invalidates its cached truth."""
-    meta = processed_dir(name) / "meta.json"
-    return json.loads(meta.read_text())["source_sha256"] if meta.exists() else "unknown"
-
-
 def ground_truth(ds: Dataset, index: faiss.IndexFlatL2 | None = None, k: int = GT_K,
                  cache: bool = True) -> GroundTruth:
     """Exact top-k of every query in `ds` against `ds.base`, cached on disk.
 
-    Pass the IndexFlatL2 you already built to avoid a second copy of the base. This is not timed, so FAISS
-    may use every core here.
+    Pass the IndexFlatL2 you already built to avoid a second copy of the base. This is not timed, so FAISS may
+    use every core here. Data without a source fingerprint (e.g. synthetic data) is never cached, because two
+    different datasets could share a name and a size.
     """
     path = _cache_path(ds, k)
-    fingerprint = _source_fingerprint(ds.name)
+    fingerprint = source_fingerprint(ds.name)
+    cache = cache and fingerprint != "unknown"
     if cache and path.exists():
         with np.load(path) as cached:
             if str(cached["fingerprint"]) == fingerprint:

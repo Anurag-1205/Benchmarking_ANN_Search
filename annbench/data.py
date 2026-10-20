@@ -45,6 +45,13 @@ def processed_dir(name: str) -> Path:
     return config.data_dir() / "processed" / name
 
 
+def source_fingerprint(name: str) -> str:
+    """sha256 of the HDF5 a prepared dataset came from, or "unknown" (e.g. synthetic data). Caches derived from a
+    dataset (ground truth, indexes) store it, so re-preparing the data invalidates them; "unknown" is never cached."""
+    meta = processed_dir(name) / "meta.json"
+    return json.loads(meta.read_text())["source_sha256"] if meta.exists() else "unknown"
+
+
 # --- HDF5 -> .npy ------------------------------------------------------------------------------------
 def _sha256(path: Path, block: int = 1 << 20) -> str:
     digest = hashlib.sha256()

@@ -41,12 +41,21 @@ def test_ground_truth_distances_match_brute_force():
 
 def test_ground_truth_is_cached_on_disk(tmp_path, monkeypatch):
     monkeypatch.setenv("ANNBENCH_DATA_DIR", str(tmp_path))
+    meta = tmp_path / "processed" / "toy" / "meta.json"          # a fingerprint makes the toy data cacheable
+    meta.parent.mkdir(parents=True)
+    meta.write_text('{"source_sha256": "toy"}')
     ds = _toy()
     first = exact.ground_truth(ds, k=10)
     assert (tmp_path / "ground_truth" / "toy_n200_q12_k10.npz").exists()
     second = exact.ground_truth(ds, k=10)
     np.testing.assert_array_equal(first.ids, second.ids)
     np.testing.assert_array_equal(first.dist_sq, second.dist_sq)
+
+
+def test_data_without_a_fingerprint_is_never_cached(tmp_path, monkeypatch):
+    monkeypatch.setenv("ANNBENCH_DATA_DIR", str(tmp_path))
+    exact.ground_truth(_toy(), k=10)
+    assert not (tmp_path / "ground_truth").exists()
 
 
 def test_agreement_with_file_counts_identical_id_sets():
