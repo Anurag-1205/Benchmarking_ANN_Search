@@ -61,8 +61,48 @@ def recall_at_k(
     * memory: `base[returned_ids]` is (n_queries, k, dim) floats -- process the queries in chunks
       (see memory.chunk_slices) rather than in one shot.
     """
-    raise NotImplementedError("TODO(you): implement recall_at_k - see the docstring for the contract")
+    n_queries = queries.shape[0]
+    recalls = np.zeros(n_queries, dtype=np.float32)
 
+    # Chunk queries to keep memory footprint under 2 GiB
+    # (chunk_size * k * dim * 4 bytes is trivial at 1000 queries)
+    chunk_size = 1000
+
+    for start_idx in range(0, n_queries, chunk_size):
+        end_idx = min(start_idx +chunk_size, n_queries)
+        q_chunk = queries[start_idx:end_idx]
+        ids_chunk = returned_ids[start_idx:end_idx, :k]
+        thresh_chunk = kth_true_dist_sq[start_idx:end_idx] * (1.0 + rel_eps)
+
+        chunk_len = end_idx - start_idx
+        chunk_hits = np.zeros(chunk_len, dtype=np.float32)
+
+        for i in range(chunk_len):
+            row_ids = ids_chunk[i]
+            q_vec = q_chunk[i]
+            threshold = thresh_chunk[i]
+
+            #1. Filter out invalid/padding entries (-1)
+            valid_ids = row_ids[row_ids >= 0]
+
+            #2 Keep unique IDs (duplicates within the top-k count only once)
+            unique_ids = np.unique(valid_ids)
+
+            if len(unique_ids) == 0:
+                continue
+
+            #3. Retrieve actual base vectors and compute true squared L2 distance
+            retrieved_vectors = base[unique_ids]
+            diff = retrieved_vectors - q_vec
+            dists_sq = np.sum(diff * diff, axis=1)
+
+            # 4. Count valid hits within threshold (tie-aware condition)
+            hits = np.sum(dists_sq <= threshold)
+            chunk_hits[i] = hits / float(k)
+
+        recalls[start_idx:end_idx] = chunk_hits
+
+    return recalls if per_query else float(np.mean(recalls))
 
 def recall_at_10(
     returned_ids: np.ndarray,
