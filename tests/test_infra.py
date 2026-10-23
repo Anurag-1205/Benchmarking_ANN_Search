@@ -103,3 +103,11 @@ def test_drop_rows_removes_only_the_matching_rows(tmp_path):
     assert sorted(zip(df["experiment"], df["dataset"])) == [("a", "glove"), ("b", "sift")]
     assert results_log.drop_rows("a", path=path) == 1
     assert results_log.drop_rows("missing", path=path) == 0
+
+
+def test_drop_rows_can_target_one_index_type(tmp_path):
+    path = tmp_path / "results.csv"
+    results_log.log_run(path=path, **_row(experiment="p2", index_type="hnsw"))
+    results_log.log_run(path=path, **_row(experiment="p2", index_type="ivf_flat"))
+    assert results_log.drop_rows("p2", dataset="sift", index_type="hnsw", path=path) == 1
+    assert results_log.load_results(path)["index_type"].tolist() == ["ivf_flat"]

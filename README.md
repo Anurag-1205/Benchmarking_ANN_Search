@@ -19,17 +19,21 @@ bash run_all.sh            # full run                                           
 3. records the machine and library versions in `system_info.json`;
 4. runs one stage per assignment part; every benchmark run is appended to `results.csv`.
 
-Requirements: Linux, Python >= 3.10, g++ and the Python headers (hnswlib compiles from source), about 2 GB of
-disk for the data (1 GB downloaded + 1 GB converted), and at least 2 GiB of free RAM (everything is chunked or memory-mapped for that reason).
+One part can also run on its own, e.g. `python -m annbench.stages.part2_benchmark --datasets sift --indexes hnsw`.
+
+Requirements: Linux, Python >= 3.10, g++ and the Python headers (hnswlib compiles from source), at least 2 GiB of
+free RAM (everything is chunked or memory-mapped for that reason), and disk for the data: 2 GB (1 GB downloaded +
+1 GB converted) plus up to ~10 GB of cached indexes for the full run.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `annbench/config.py` | paths, constants, quick-mode switch (`ANNBENCH_QUICK`) |
+| `annbench/config.py` | paths, constants, quick-mode switch (`ANNBENCH_QUICK`), Part 2 grids |
 | `annbench/data.py` | HDF5 -> `.npy` conversion, memory-mapped loading, query split |
 | `annbench/exact.py` | exact search (IndexFlatL2), cached ground truth, agreement with the HDF5 file |
-| `annbench/stages/` | one runnable module per part, e.g. `python -m annbench.stages.part1_exact` |
+| `annbench/indexes.py` | HNSW / IVF-Flat / IVF-PQ build, search, save/load, on-disk index cache |
+| `annbench/stages/` | one runnable module per part: `part1_exact`, `part2_benchmark`, `report_assets` |
 | `annbench/results_log.py` | the only writer of `results.csv` |
 | `annbench/threads.py` | single-thread enforcement for searches |
 | `annbench/memory.py` | RAM guards and chunking helpers |
@@ -41,9 +45,12 @@ disk for the data (1 GB downloaded + 1 GB converted), and at least 2 GiB of free
 
 ## Conventions
 
-- Every search runs on **one thread** (`threads.force_single_thread_search`). Builds may use
-  `ANNBENCH_BUILD_THREADS` (default 4); the thread counts are logged in every row.
-- The queries are split in half: tuning uses the first half, reported numbers the second half.
+- Every timed search runs on **one thread** (`threads.force_single_thread_search`, hnswlib `num_threads=1`).
+  Builds use `ANNBENCH_BUILD_THREADS` (default 4); the thread counts are logged in every row.
+- The queries are split in half: tuning uses the first half, reported numbers the second half. Part 2 logs a
+  `tune` row (recall only) and a `report` row (recall + single-query QPS) for every sweep point.
+- Part 2 sweeps the search parameter upwards until the tune recall reaches 0.995 or stops improving.
+- Built indexes are cached in `../data/indexes/` with their build statistics; `--rebuild` forces fresh builds.
 - One seed (`config.SEED`) drives every random choice.
 - Datasets, indexes and the virtualenv live **outside** `code/` and are not part of the submission.
 
@@ -56,7 +63,7 @@ Written to `system_info.json` by `run_all.sh`. _TODO: paste the summary here onc
 | Part | State |
 |---|---|
 | Setup | done |
-| 1 Exact baseline | plumbing ready; waiting for `recall_at_k` and the timing loops |
-| 2 Benchmark | TODO |
+| 1 Exact baseline | done (recall and timing loops by the student); verified in quick mode |
+| 2 Benchmark | pipeline ready; waiting for the plotting code and the full run |
 | 3 Standard-data experiment | TODO |
 | 4 Own-data experiment | TODO |

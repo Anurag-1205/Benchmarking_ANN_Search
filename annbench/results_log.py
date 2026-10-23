@@ -123,9 +123,10 @@ def log_run(*, path: Path | None = None, **fields: Any) -> dict[str, Any]:
     return row
 
 
-def drop_rows(experiment: str, *, dataset: str | None = None, path: Path | None = None) -> int:
-    """Delete earlier rows of `experiment` (optionally of one dataset) for the current mode, so a re-run replaces
-    its rows instead of piling up duplicates. Returns the number of rows removed."""
+def drop_rows(experiment: str, *, dataset: str | None = None, index_type: str | None = None,
+              path: Path | None = None) -> int:
+    """Delete earlier rows of `experiment` (optionally only one dataset and/or index type) for the current mode, so
+    a re-run replaces its rows instead of piling up duplicates. Returns the number of rows removed."""
     target = Path(path) if path is not None else config.results_csv()
     if not target.exists():
         return 0
@@ -141,7 +142,8 @@ def drop_rows(experiment: str, *, dataset: str | None = None, path: Path | None 
                 raise RuntimeError(f"{target} has a different header than results_log.COLUMNS")
             keep = [r for r in rows[1:]
                     if not (r[col["experiment"]] == experiment and r[col["mode"]] == mode
-                            and (dataset is None or r[col["dataset"]] == dataset))]
+                            and (dataset is None or r[col["dataset"]] == dataset)
+                            and (index_type is None or r[col["index_type"]] == index_type))]
             removed = len(rows) - 1 - len(keep)
             if removed:
                 f.seek(0)

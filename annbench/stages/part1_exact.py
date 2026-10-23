@@ -26,12 +26,14 @@ import gc
 import os
 import sys
 
+import faiss
+
 from .. import config, data, exact, memory, metrics, results_log, threads, timing
 
 EXPERIMENT = "part1_exact"
 SINGLE_QUERY_SAMPLE = 300          # report queries timed one at a time (tens of ms each on the full base)
 REPEATS_SINGLE = 3
-REPEATS_BATCH = 3
+REPEATS_BATCH = 5                  # batch timings on a laptop are noisy (turbo, background load): median of 5
 BATCH_THREADS = (1, os.cpu_count() or 1)
 
 
@@ -85,7 +87,11 @@ def run_dataset(name: str) -> int:
         rows.append(dict(common, split="report", n_queries=batch.n_queries, recall=exact_recall,
                          search_params={"mode": "batch"}, threads_search=n_threads,
                          qps=batch.qps_median, qps_runs=batch.qps_runs, n_repeats=batch.n_repeats,
-                         peak_rss_mb=memory.peak_rss_mb()))
+                         peak_rss_mb=memory.peak_rss_mb(),
+                         # FAISS switches to its BLAS (matrix-multiply) kernel only when n_queries * dim reaches
+                         # distance_compute_blas_threshold (128,000 in faiss 1.15); below it a batch is just a loop.
+                         extra={"faiss_blas_path": batch.n_queries * ds.dim
+                                >= faiss.cvar.distance_compute_blas_threshold}))
     threads.force_single_thread_search()                          # leave FAISS in the benchmark state
 
     results_log.drop_rows(EXPERIMENT, dataset=name)
