@@ -7,6 +7,8 @@ adapt the runner.
 """
 from __future__ import annotations
 
+import gc
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -34,27 +36,43 @@ def time_single_queries(
     n_repeats: int = 5,
     n_warmup: int = 100,
 ) -> TimingResult:
-    """Queries per second when queries arrive ONE AT A TIME on ONE thread (assignment Part 2).
+    """Queries per second when queries arrive ONE AT A TIME on ONE thread (assignment Part 2)."""
+    n_queries = queries.shape[0]
 
-    Contract the benchmark runner relies on
-    ---------------------------------------
-    * `search_fn(q)` is called with one query of shape (1, dim), float32, C-contiguous, and performs one
-      complete k-NN search, e.g. `lambda q: index.search(q, 10)` for FAISS or
-      `lambda q: hnsw.knn_query(q, k=10)` for hnswlib. Its return value is ignored: no recall work and no
-      result handling inside the timed region.
-    * This function does not touch thread settings. The caller has already run
-      threads.force_single_thread_search(...).
-    * Warm up first (`n_warmup` untimed queries: page the index in, fill caches), then time `n_repeats`
-      full passes over `queries`. The MEDIAN of the per-pass QPS is the headline number ("repeat each timing
-      a few times and take the median").
+    # Pre-slice queries to shape (1, dim) outside the timed loop to avoid slicing overhead
+    q_list = [queries[i:i+1] for i in range(n_queries)]
 
-    Things to decide
-    ----------------
-    * clock: time.perf_counter(); keep per-query slicing/array preparation outside the timed region;
-    * garbage collector: consider gc.disable() during the timed passes (re-enable in `finally`);
-    * every pass uses the same queries in the same order.
-    """
-    raise NotImplementedError("TODO(you): the one-query-at-a-time timing loop")
+    # Warmup phase (untimed)
+    warmup_iters = min(n_warmup, n_queries)
+    for i in range(warmup_iters):
+        search_fn(q_list[i])
+
+    seconds_runs = []
+    qps_runs = []
+
+    # Disable garbage collector to prevent random stalls during timing
+    gc.disable()
+    try:
+        for _ in range(n_repeats):
+            start = time.perf_counter()
+            for q in q_list:
+                search_fn(q)
+            elapsed = time.perf_counter() - start
+            
+            seconds_runs.append(elapsed)
+            qps_runs.append(n_queries / elapsed)
+    finally:
+        gc.enable()
+
+    qps_median = float(np.median(qps_runs))
+
+    return TimingResult(
+        qps_median=qps_median,
+        qps_runs=qps_runs,
+        seconds_runs=seconds_runs,
+        n_queries=n_queries,
+        n_repeats=n_repeats
+    )
 
 
 def time_batch(
@@ -62,10 +80,30 @@ def time_batch(
     queries: np.ndarray,
     n_repeats: int = 3,
 ) -> TimingResult:
-    """Queries per second when ALL queries are sent in a single call (Part 1: exact-search batch timing).
+    """Queries per second when ALL queries are sent in a single call (Part 1: exact-search batch timing)."""
+    n_queries = queries.shape[0]
+    seconds_runs = []
+    qps_runs = []
 
-    `search_fn(queries)` receives the whole (n_queries, dim) float32 array at once. The thread count is
-    whatever the caller configured -- state it in the report, because it is part of why batch and
-    one-at-a-time differ so much. QPS = n_queries / elapsed seconds; repeat and take the median as above.
-    """
-    raise NotImplementedError("TODO(you): the all-queries-in-one-call timing")
+    # Disable garbage collector to prevent random stalls during timing
+    gc.disable()
+    try:
+        for _ in range(n_repeats):
+            start = time.perf_counter()
+            search_fn(queries)
+            elapsed = time.perf_counter() - start
+            
+            seconds_runs.append(elapsed)
+            qps_runs.append(n_queries / elapsed)
+    finally:
+        gc.enable()
+
+    qps_median = float(np.median(qps_runs))
+
+    return TimingResult(
+        qps_median=qps_median,
+        qps_runs=qps_runs,
+        seconds_runs=seconds_runs,
+        n_queries=n_queries,
+        n_repeats=n_repeats
+    )
