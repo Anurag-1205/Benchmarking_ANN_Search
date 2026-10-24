@@ -7,34 +7,33 @@ calls these functions. Part 3 and Part 4 figures get their own functions here la
 run_all.sh runs without a display, so select a non-interactive backend before importing pyplot
 (`import matplotlib; matplotlib.use("Agg")`), and close every figure after saving it (`plt.close(fig)`).
 """
-from __future__ import annotations
-
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import pandas as pd
+import pandas as pd
 
 
 def best_tradeoff_curve(points: pd.DataFrame) -> pd.DataFrame:
-    """The best trade-off curve of ONE index on ONE dataset: the Pareto frontier of its (recall, qps) points.
+    """The best trade-off curve of ONE index on ONE dataset: the Pareto frontier of its (recall, qps) points."""
+    if points.empty:
+        return points
 
-    Parameters
-    ----------
-    points : the report-split rows of one index_type on one dataset -- every build setting and every sweep value.
-        Useful columns: `recall` (float), `qps` (float, single-query QPS), `build_params` (dict, e.g.
-        {"M": 16, "efConstruction": 200}), `search_params` (dict, e.g. {"ef": 64}).
-
-    Returns
-    -------
-    The rows on the frontier, sorted by recall (ascending). A row is on the frontier when no other row has
-    recall >= its recall and qps >= its qps with at least one of the two strictly greater. Because the frontier
-    can mix build settings, keep the build_params / search_params columns: they make good point labels.
-
-    This is what "the best trade-off curve for each index" means in Part 2: plot it, one line per index, instead
-    of every raw sweep curve.
-    """
-    raise NotImplementedError("TODO(you): the best trade-off curve (Pareto frontier) of one index")
+    # Sort by recall descending. If tied, sort by QPS descending.
+    # This allows us to sweep from highest recall downwards, keeping only points that offer strictly better QPS.
+    sorted_pts = points.sort_values(by=["recall", "qps"], ascending=[False, False])
+    
+    frontier_indices = []
+    max_qps_so_far = -1.0
+    
+    for idx, row in sorted_pts.iterrows():
+        if row["qps"] > max_qps_so_far:
+            frontier_indices.append(idx)
+            max_qps_so_far = row["qps"]
+            
+    # The assignment requires the final curve to be sorted by recall ascending for plotting
+    frontier = sorted_pts.loc[frontier_indices].sort_values(by="recall", ascending=True)
+    return frontier
 
 
 def plot_recall_vs_qps(
@@ -44,30 +43,67 @@ def plot_recall_vs_qps(
     exact_qps: float | None = None,
     title: str | None = None,
 ) -> Path:
-    """Part 2 main figure: recall@10 (x) against single-query QPS (y) for one dataset.
+    """Part 2 main figure: recall@10 (x) against single-query QPS (y) for one dataset."""
+    if out_path is None:
+        out_path = Path("results/figures") / f"recall_vs_qps_{dataset}.png"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    Parameters
-    ----------
-    results : the Part 2 rows of `dataset` measured on the report half of the queries (experiment
-        "part2_benchmark", split "report"; stages/report_assets.py does the filtering). One row per
-        (index_type, build_params, search_params). index_type is one of "hnsw", "ivf_flat", "ivf_pq".
-    dataset : "sift" or "glove" (for the title and the default file name).
-    out_path : where to save; default config.figures_dir() / f"recall_vs_qps_{dataset}.png". Create the parent
-        folder if it does not exist.
-    exact_qps : single-thread, one-query-at-a-time QPS of exact search from Part 1, or None if Part 1 has not
-        run. Draw it as a single marker at recall 1.0.
-    title : optional figure title.
+    fig, ax = plt.subplots(figsize=(5.5, 4), dpi=200)
 
-    Returns
-    -------
-    The path of the saved figure.
+    # Standardize display names and colors for the report
+    display_names = {
+        "hnsw": "HNSW",
+        "ivf_flat": "IVF-Flat",
+        "ivf_pq": "IVF-PQ"
+    }
+    colors = {
+        "hnsw": "tab:blue",
+        "ivf_flat": "tab:orange",
+        "ivf_pq": "tab:green"
+    }
 
-    What the figure must show (assignment Part 2)
-    ---------------------------------------------
-    * one line per index: best_tradeoff_curve(rows of that index_type);
-    * QPS on a log axis (it spans orders of magnitude), recall on a linear axis, both labelled with units;
-    * the exact baseline marker and a legend;
-    * a size that stays readable at half a page, since two datasets must share the 5-page report
-      (e.g. figsize around (5, 3.5), dpi 200).
-    """
-    raise NotImplementedError("TODO(you): the recall-vs-QPS figure")
+    for index_type in results["index_type"].unique():
+        index_data = results[results["index_type"] == index_type]
+        frontier = best_tradeoff_curve(index_data)
+        
+        label = display_names.get(index_type, index_type)
+        color = colors.get(index_type, "tab:gray")
+        
+        ax.plot(
+            frontier["recall"], 
+            frontier["qps"], 
+            marker="o", 
+            markersize=4, 
+            label=label,
+            color=color,
+            linewidth=1.5
+        )
+
+    if exact_qps is not None:
+        ax.plot(
+            1.0, 
+            exact_qps, 
+            marker="*", 
+            markersize=10, 
+            color="tab:red", 
+            linestyle="None",
+            label="Exact Baseline"
+        )
+
+    ax.set_yscale("log")
+    ax.set_xlabel("Recall@10")
+    ax.set_ylabel("Queries per second (QPS)")
+    
+    if title:
+        ax.set_title(title)
+    else:
+        ax.set_title(f"Recall vs. QPS ({dataset.upper()})")
+        
+    ax.grid(True, which="both", linestyle="--", alpha=0.5)
+    ax.legend(loc="lower left")
+
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+    
+    return out_path
