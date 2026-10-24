@@ -37,14 +37,14 @@ def _stalled(history: list[float]) -> bool:
 
 
 def sweep(ds: data.Dataset, gt: exact.GroundTruth, index: indexes.AnnIndex, stats: indexes.BuildStats,
-          values: list[int]) -> list[dict]:
+          values: list[int], experiment: str = EXPERIMENT) -> list[dict]:
     """Rows for one built index: two per sweep value (tune recall; report recall + single-query QPS)."""
     k = config.K
     kth = gt.kth_dist_sq(k)
     tune_q, report_q = ds.tune_queries(), ds.report_queries()
     kth_tune, kth_report = kth[ds.tune], kth[ds.report]
     timed_q = report_q[: config.part2_timed_queries()]
-    common = dict(experiment=EXPERIMENT, dataset=ds.name, index_type=stats.kind, n_base=ds.n_base,
+    common = dict(experiment=experiment, dataset=ds.name, index_type=stats.kind, n_base=ds.n_base,
                   build_params=stats.params, build_time_s=stats.build_time_s, index_size_bytes=stats.index_bytes,
                   bytes_per_vector=stats.bytes_per_vector, threads_build=stats.threads_build)
     build_extra = {"train_time_s": stats.train_time_s, "index_from_cache": stats.from_cache}

@@ -55,6 +55,17 @@ PART2_REPEATS = 3                            # timing repeats per sweep point (t
 PART2_TIMED_QUERIES = 1_000                  # report queries timed one at a time per sweep point
 QUICK_PART2_TIMED_QUERIES = 300
 
+# --- Part 4: intrinsic dimension (hypothesis.md, committed in b7ea947) -----------------------------
+PART4_STORED_DIM = 128                       # every synthetic vector is stored in 128 dimensions
+PART4_DIMS = (8, 16, 32, 64, 128)            # intrinsic dimension m; m = 8 is the unchanged control
+PART4_CONTROL_DIM = 8
+PART4_N_BASE = 200_000
+QUICK_PART4_N_BASE = 50_000
+PART4_N_QUERIES = 2_000                      # first half tunes, second half reports
+QUICK_PART4_N_QUERIES = 1_000
+PART4_HNSW = {"M": 16, "efConstruction": 200}
+PART4_EXACT_TIMED_QUERIES = 300
+
 
 # --- run-time switches (read at call time so tests and run_all.sh can change them) ------------------
 def is_quick() -> bool:
@@ -111,6 +122,16 @@ def part2_sweep(kind: str, build: dict) -> list[int]:
 
 def part2_timed_queries() -> int:
     return QUICK_PART2_TIMED_QUERIES if is_quick() else PART2_TIMED_QUERIES
+
+
+def part4_sizes() -> tuple[int, int]:
+    """(base vectors, queries) per synthetic dataset; the hypothesis fixes 200,000 and 2,000 for the full run."""
+    return (QUICK_PART4_N_BASE, QUICK_PART4_N_QUERIES) if is_quick() else (PART4_N_BASE, PART4_N_QUERIES)
+
+
+def part4_builds(n_base: int) -> dict[str, dict]:
+    """Fixed build settings (only m changes): HNSW M16/efC200 and IVF-Flat with nlist = sqrt(n) -> 512 at 200k."""
+    return {"hnsw": dict(PART4_HNSW), "ivf_flat": {"nlist": nlist_for(n_base, 1.0)}}
 
 
 # --- datasets --------------------------------------------------------------------------------------

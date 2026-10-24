@@ -33,7 +33,9 @@ free RAM (everything is chunked or memory-mapped for that reason), and disk for 
 | `annbench/data.py` | HDF5 -> `.npy` conversion, memory-mapped loading, query split |
 | `annbench/exact.py` | exact search (IndexFlatL2), cached ground truth, agreement with the HDF5 file |
 | `annbench/indexes.py` | HNSW / IVF-Flat / IVF-PQ build, search, save/load, on-disk index cache |
-| `annbench/stages/` | one runnable module per part: `part1_exact`, `part2_benchmark`, `report_assets` |
+| `annbench/stages/` | one runnable module per part: `part1_exact`, `part2_benchmark`, `part3_experiment`, `part4_experiment`, `report_assets` |
+| `annbench/synthetic.py` | seeded Part 4 data generator (intrinsic dimension m stored in 128-d) |
+| `annbench/tables.py` | report tables (settings chosen on the tune half) |
 | `annbench/results_log.py` | the only writer of `results.csv` |
 | `annbench/threads.py` | single-thread enforcement for searches |
 | `annbench/memory.py` | RAM guards and chunking helpers |
@@ -63,7 +65,7 @@ Written to `system_info.json` by `run_all.sh`. _TODO: paste the summary here onc
 | Part | State |
 |---|---|
 | Setup | done |
-| 1 Exact baseline | done (recall and timing loops by the student); verified in quick mode |
-| 2 Benchmark | pipeline ready; waiting for the plotting code and the full run |
-| 3 Standard-data experiment | TODO |
-| 4 Own-data experiment | TODO |
+| 1 Exact baseline | done; full run 2026-10-24 |
+| 2 Benchmark | done; full run 2026-10-24; tables in `results/tables/`, figures in `results/figures/` |
+| 3 Query difficulty (GloVe) | done; full run 2026-10-24; figure still to plot |
+| 4 Intrinsic dimension (synthetic, `annbench/synthetic.py`) | stage ready, checked in quick mode; full run pending |

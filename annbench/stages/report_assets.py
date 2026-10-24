@@ -1,7 +1,8 @@
 """Report tables and figures from results.csv.
 
-Tables (annbench/tables.py) are written first, so they do not depend on the plotting code. Figures are drawn by
-YOUR plotting functions in annbench/plotting.py; this module only selects rows and passes them in.
+Tables (annbench/tables.py) are written first, so they never depend on the plotting code. Figures are drawn by
+YOUR plotting functions in annbench/plotting.py; this module only selects rows and passes them in. A figure whose
+function is not written yet is reported and skipped; the stage then exits non-zero so run_all.sh notices.
 
     python -m annbench.stages.report_assets
 """
@@ -26,23 +27,38 @@ def main() -> None:
         sys.exit(f"[report] {config.results_csv()} does not exist yet - run the stages first")
     df = results_log.load_results()
 
-    for path in tables.write_part2_tables(df, config.results_dir() / "tables"):
+    table_dir = config.results_dir() / "tables"
+    for path in tables.write_part2_tables(df, table_dir) + tables.write_part3_part4_tables(df, table_dir):
         _say(f"wrote {path}")
 
     figures = config.figures_dir()
     figures.mkdir(parents=True, exist_ok=True)
+    jobs = []
     for name in config.DATASETS:
         rows = part2_report_rows(df, name)
-        if rows.empty:
-            _say(f"{name}: no Part 2 rows yet; skipping its figure")
-            continue
-        exact = tables.exact_baseline(df, name)
+        if not rows.empty:
+            exact = tables.exact_baseline(df, name)
+            jobs.append((f"recall vs QPS ({name})", plotting.plot_recall_vs_qps,
+                         dict(results=rows, dataset=name, out_path=figures / f"recall_vs_qps_{name}.png",
+                              exact_qps=exact["qps"] if exact else None)))
+    part3 = tables.part3_summary(df)
+    if not part3.empty:
+        jobs.append(("Part 3 recall by difficulty", plotting.plot_recall_by_difficulty,
+                     dict(summary=part3, out_path=figures / "part3_recall_by_difficulty.png")))
+    part4 = tables.part4_summary(df)
+    if not part4.empty:
+        jobs.append(("Part 4 intrinsic dimension", plotting.plot_intrinsic_dimension,
+                     dict(summary=part4, out_path=figures / "part4_intrinsic_dimension.png")))
+
+    missing = []
+    for label, draw, kwargs in jobs:
         try:
-            path = plotting.plot_recall_vs_qps(rows, name, out_path=figures / f"recall_vs_qps_{name}.png",
-                                               exact_qps=exact["qps"] if exact else None)
+            _say(f"{label}: wrote {draw(**kwargs)}")
         except NotImplementedError as exc:
-            sys.exit(f"[report] stopped at a function you still have to write -> {exc}")
-        _say(f"{name}: wrote {path}")
+            _say(f"{label}: skipped -> {exc}")
+            missing.append(label)
+    if missing:
+        sys.exit(f"[report] figures still to write: {', '.join(missing)}")
 
 
 if __name__ == "__main__":

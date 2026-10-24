@@ -112,3 +112,71 @@ def write_part2_tables(df: pd.DataFrame, out_dir: Path) -> list[Path]:
     csv = out_dir / "part2_operating_points.csv"
     ops.assign(build_params=ops["build_params"].map(_key), search_params=ops["search_params"].map(_key)).to_csv(csv, index=False)
     return [markdown, csv]
+
+
+# --- Part 3 and Part 4 ------------------------------------------------------------------------------
+def part3_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per (operating point, difficulty bin) of the Part 3 experiment, ready to plot or tabulate."""
+    rows = df[df["experiment"] == "part3_query_difficulty"]
+    out = []
+    for _, r in rows.iterrows():
+        targets = r["extra"]["targets"]
+        target = f"{targets[0]:.2f}" if isinstance(targets[0], float) else "best"
+        out.append({"index_type": r["index_type"], "index": NAMES[r["index_type"]], "target": target,
+                    "setting": _setting({**r["build_params"], **r["search_params"]}), "bin": r["extra"]["bin"],
+                    "rc_min": r["extra"]["rc_min"], "rc_max": r["extra"]["rc_max"], "recall": float(r["recall"]),
+                    "recall_all": r["extra"]["recall_all_report"], "n_queries": int(r["n_queries"])})
+    return pd.DataFrame(out).sort_values(["index_type", "target", "bin"]).reset_index(drop=True) if out else pd.DataFrame()
+
+
+def part4_summary(df: pd.DataFrame, target: float = 0.95) -> pd.DataFrame:
+    """Per intrinsic dimension m and index: the fastest setting reaching `target` (chosen on the tune half), its
+    report recall and QPS, next to the exact-search QPS and the dataset's mean relative contrast."""
+    rows = df[df["experiment"] == "part4_intrinsic_dim"]
+    out = []
+    for dataset in sorted(set(rows["dataset"]), key=lambda d: int(d.split("_m")[-1])):
+        mine = rows[rows["dataset"] == dataset]
+        tags = mine["extra"].iloc[0]
+        exact = mine[mine["index_type"] == "exact"]
+        exact_qps = float(exact["qps"].iloc[0]) if len(exact) else float("nan")
+        out.append({"m": tags["m"], "role": tags["role"], "rc_mean": tags["rc_mean"], "index_type": "exact",
+                    "index": NAMES["exact"], "reached": True, "setting": "-", "recall": 1.0, "qps": exact_qps,
+                    "speedup_vs_exact": 1.0})
+        for _, op in operating_points(df, dataset, targets=(target,), experiment="part4_intrinsic_dim").iterrows():
+            out.append({"m": tags["m"], "role": tags["role"], "rc_mean": tags["rc_mean"], "index_type": op["index_type"],
+                        "index": NAMES[op["index_type"]], "reached": bool(op["reached"]),
+                        "setting": _setting({**op["build_params"], **op["search_params"]}), "recall": op["recall"],
+                        "qps": op["qps"], "speedup_vs_exact": op["qps"] / exact_qps})
+    return pd.DataFrame(out)
+
+
+def write_part3_part4_tables(df: pd.DataFrame, out_dir: Path) -> list[Path]:
+    """Markdown tables for Parts 3 and 4 (whichever has rows). Returns the files written."""
+    written = []
+    out_dir.mkdir(parents=True, exist_ok=True)
+    p3 = part3_summary(df)
+    if not p3.empty:
+        lines = ["| Index | Target | Setting | Overall | " + " | ".join(
+                     f"Bin {b} (RC {g['rc_min'].iloc[0]:.2f}-{g['rc_max'].iloc[0]:.2f})" for b, g in p3.groupby("bin")) + " |",
+                 "|---|---|---|---|" + "---|" * p3["bin"].nunique()]
+        for (_, target, setting), g in p3.groupby(["index", "target", "setting"], sort=False):
+            g = g.sort_values("bin")
+            lines.append(f"| {g['index'].iloc[0]} | {target} | {setting} | {g['recall_all'].iloc[0]:.3f} | "
+                         + " | ".join(f"{x:.3f}" for x in g["recall"]) + " |")
+        path = out_dir / "part3_recall_by_difficulty.md"
+        path.write_text("## Part 3: recall@10 per difficulty bin (bin 1 = lowest relative contrast = hardest)\n\n"
+                        + "\n".join(lines) + "\n")
+        written.append(path)
+    p4 = part4_summary(df)
+    if not p4.empty:
+        lines = ["| m | Role | Mean RC | Index | Setting at recall 0.95 | Recall | QPS | Speed-up vs exact |",
+                 "|---|---|---|---|---|---|---|---|"]
+        for _, r in p4.iterrows():
+            qps = f"{r['qps']:,.0f}" if r["reached"] else "not reached"
+            lines.append(f"| {r['m']} | {r['role']} | {r['rc_mean']:.2f} | {r['index']} | {r['setting']} | "
+                         f"{r['recall']:.3f} | {qps} | {r['speedup_vs_exact']:.1f}x |")
+        path = out_dir / "part4_intrinsic_dimension.md"
+        path.write_text("## Part 4: cost of recall 0.95 against intrinsic dimension (stored dimension 128)\n\n"
+                        + "\n".join(lines) + "\n")
+        written.append(path)
+    return written
